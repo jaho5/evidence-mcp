@@ -99,9 +99,7 @@ Add to Claude Desktop config (`~/Library/Application Support/Claude/claude_deskt
 
 ---
 
-## Programmatic Usage
-
-### Using the MCP Python SDK
+## Programmatic Usage (MCP Client)
 
 ```python
 import asyncio
@@ -137,132 +135,38 @@ async def main():
             })
             print("Docs:", result.content)
 
-            # Call edit_page
-            result = await session.call_tool("edit_page", arguments={
-                "description": "Add a sales chart",
-                "edit": "# Sales Report\n\n```sql sales\nSELECT * FROM orders\n```\n\n<LineChart data={sales} x=date y=amount/>"
-            })
-            print("Edit result:", result.content)
-
-            # Call debug_code
-            result = await session.call_tool("debug_code", arguments={
-                "errors": [{"message": "Unknown query 'sales'", "line": 5}],
-                "page_content": "<LineChart data={sales}/>"
-            })
-            print("Debug result:", result.content)
-
 asyncio.run(main())
 ```
 
-### Direct Import (for embedding)
+### With OpenAI Agents SDK
 
-```python
-import asyncio
-from evidence_mcp.server import get_metadata, read_docs, edit_page, debug_code
-from evidence_mcp.services.doc_registry import DocRegistry
-from evidence_mcp.services.evidence_client import EvidenceClient
-from evidence_mcp.config import settings
+First, run the server in SSE mode:
 
-async def example():
-    # Use the tools directly
-
-    # Get documentation
-    registry = DocRegistry(docs_path=settings.get_docs_path())
-    doc = registry.lookup("charts", "LineChart")
-    print(f"Title: {doc.title}")
-    print(f"Content: {doc.content[:200]}...")
-
-    # Validate content
-    from evidence_mcp.server import validate_evidence_content
-    warnings = validate_evidence_content("""
-    ```sql
-    SELECT * FROM orders
-    ```
-    <LineChart data={query}/>
-    """)
-    print(f"Warnings: {warnings}")
-
-asyncio.run(example())
+```bash
+EVIDENCE_MCP_TRANSPORT=sse \
+EVIDENCE_MCP_EVIDENCE_PROJECT_PATH=/path/to/your/evidence/project \
+uv run evidence-mcp
 ```
 
-### Using with LangChain
+Then use `HostedMCPTool` to connect:
 
 ```python
-from langchain_core.tools import tool
-from evidence_mcp.server import validate_evidence_content
-from evidence_mcp.services.doc_registry import DocRegistry
-from evidence_mcp.config import settings
+from agents import Agent, HostedMCPTool
 
-registry = DocRegistry(docs_path=settings.get_docs_path())
-
-@tool
-def evidence_read_docs(doc_type: str, component: str = None) -> dict:
-    """Look up Evidence documentation for a component."""
-    return registry.lookup(doc_type, component).model_dump()
-
-@tool
-def evidence_validate(content: str) -> list[str]:
-    """Validate Evidence markdown content."""
-    return validate_evidence_content(content)
-
-# Use with your LangChain agent
-tools = [evidence_read_docs, evidence_validate]
-```
-
-### Using with OpenAI Function Calling
-
-```python
-import json
-from openai import OpenAI
-from evidence_mcp.services.doc_registry import DocRegistry
-from evidence_mcp.server import validate_evidence_content
-from evidence_mcp.config import settings
-
-client = OpenAI()
-registry = DocRegistry(docs_path=settings.get_docs_path())
-
-# Define tools in OpenAI format
-tools = [
-    {
-        "type": "function",
-        "function": {
-            "name": "read_docs",
-            "description": "Look up Evidence documentation",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "doc_type": {
-                        "type": "string",
-                        "enum": ["components", "charts", "inputs", "syntax", "queries", "layouts"]
-                    },
-                    "component": {"type": "string"}
-                },
-                "required": ["doc_type"]
+agent = Agent(
+    name="Evidence Assistant",
+    instructions="Help users create Evidence reports and dashboards.",
+    tools=[
+        HostedMCPTool(
+            tool_config={
+                "type": "mcp",
+                "server_label": "evidence",
+                "server_url": "http://localhost:8000/sse",
+                "require_approval": "never",
             }
-        }
-    }
-]
-
-def handle_tool_call(name: str, args: dict) -> str:
-    if name == "read_docs":
-        result = registry.lookup(args["doc_type"], args.get("component"))
-        return json.dumps(result.model_dump())
-    return json.dumps({"error": "Unknown tool"})
-
-# Use in chat completion
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[{"role": "user", "content": "How do I create a line chart in Evidence?"}],
-    tools=tools
-)
-
-if response.choices[0].message.tool_calls:
-    for tool_call in response.choices[0].message.tool_calls:
-        result = handle_tool_call(
-            tool_call.function.name,
-            json.loads(tool_call.function.arguments)
         )
-        print(result)
+    ],
+)
 ```
 
 ---
