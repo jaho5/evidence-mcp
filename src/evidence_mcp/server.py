@@ -3,13 +3,14 @@
 import logging
 import re
 import sys
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from .config import settings
 from .models.schemas import (
     DebugResponse,
+    DocType,
     EditPageResponse,
     FixSuggestion,
     MetadataResponse,
@@ -52,10 +53,6 @@ def get_doc_registry() -> DocRegistry:
     return _doc_registry
 
 
-# Type alias for doc_type parameter
-DocType = Literal["components", "charts", "inputs", "syntax", "queries", "layouts"]
-
-
 @mcp.tool()
 async def get_metadata() -> dict:
     """Returns database schema from Evidence's DuckDB connection.
@@ -79,18 +76,29 @@ async def get_metadata() -> dict:
 async def read_docs(
     doc_type: Annotated[
         DocType,
-        "Category of documentation: components, charts, inputs, syntax, queries, or layouts",
+        "Category: charts, data, inputs, ui, maps, custom, core-concepts, data-sources, deployment, guides, reference, plugins, getting-started (or legacy: components, layouts, syntax, queries)",
     ],
     component: Annotated[
         Optional[str],
-        "Specific component name (e.g., 'LineChart', 'Dropdown'). If not provided, returns category overview.",
+        "Specific component name (e.g., 'LineChart', 'USMap', 'postgres'). If not provided, returns category overview.",
     ] = None,
 ) -> dict:
     """Retrieves Evidence documentation using hierarchical lookup.
 
-    Looks up documentation for Evidence components, charts, inputs, syntax features,
-    queries, or layout components. If a specific component is not found, returns
-    the category overview with suggestions for available topics.
+    Categories:
+    - charts: LineChart, BarChart, AreaChart, Heatmap, SankeyDiagram, etc.
+    - data: Value, BigValue, DataTable, Delta
+    - inputs: Dropdown, Slider, DateInput, ButtonGroup, etc.
+    - ui: Grid, Tabs, Modal, Alert, Accordion, etc.
+    - maps: USMap, AreaMap, PointMap, BubbleMap, BaseMap
+    - custom: CustomComponent, ComponentQueries
+    - core-concepts: queries, syntax, loops, formatting, filters, etc.
+    - data-sources: postgres, mysql, snowflake, bigquery, duckdb, etc.
+    - deployment: vercel, netlify, cloudflare-pages, etc.
+    - guides: best-practices, troubleshooting, chart-cheat-sheet
+    - reference: cli, markdown, layouts
+    - plugins: source-plugins, component-plugins
+    - getting-started: install-evidence, build-your-first-app
 
     Returns:
         Dictionary with 'title', 'content', and 'related_docs' for further exploration

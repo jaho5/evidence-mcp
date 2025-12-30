@@ -59,7 +59,26 @@ class MetadataResponse(BaseModel):
 
 
 # Documentation models
-DocType = Literal["components", "charts", "inputs", "syntax", "queries", "layouts"]
+DocType = Literal[
+    "charts",
+    "data",
+    "inputs",
+    "ui",
+    "maps",
+    "custom",
+    "core-concepts",
+    "data-sources",
+    "deployment",
+    "guides",
+    "reference",
+    "plugins",
+    "getting-started",
+    # Legacy aliases
+    "components",
+    "layouts",
+    "syntax",
+    "queries",
+]
 
 
 class DocResponse(BaseModel):
